@@ -220,6 +220,11 @@ type Model struct {
 	tickRunning     bool      // true while the tick chain is active
 	lastInteraction time.Time // last user keypress/mouse event
 	lastDataUpdate  time.Time // last SnapshotsMsg with new data
+	// referenceTime is the wall-clock View() will use for "X ago" labels.
+	// Set once at the top of each View() / renderDashboard() so the same
+	// frame uses a single consistent timestamp (fixes test flakiness, gives
+	// future render-cache work a stable cache key, and keeps View() pure).
+	referenceTime time.Time
 
 	experimentalAnalytics bool // when false, only the Dashboard screen is available
 
@@ -958,6 +963,18 @@ func (m Model) visibleSnapshots() map[string]core.UsageSnapshot {
 		}
 	}
 	return out
+}
+
+// viewNow returns the wall-clock time pinned at the start of the current
+// View() pass. Falls back to time.Now() when m.referenceTime is unset (e.g.
+// methods called from non-View paths). This keeps every "X ago" / "since"
+// label inside a single frame consistent and lets tests inject time via
+// referenceTime.
+func (m Model) viewNow() time.Time {
+	if !m.referenceTime.IsZero() {
+		return m.referenceTime
+	}
+	return time.Now()
 }
 
 // allProvidersEnabled reports whether every snapshot's provider is enabled.
