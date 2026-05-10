@@ -585,30 +585,36 @@ func (m *Model) setWidgetSections(entries []config.DashboardWidgetSection) {
 	m.invalidateTileBodyCache()
 }
 
-func normalizeWidgetSectionEntries(entries []config.DashboardWidgetSection) []config.DashboardWidgetSection {
-	if len(entries) == 0 {
-		return nil
-	}
-
-	out := make([]config.DashboardWidgetSection, 0, len(entries))
-	seen := make(map[core.DashboardStandardSection]bool, len(entries))
-	for _, entry := range entries {
-		sectionID := core.DashboardStandardSection(strings.ToLower(strings.TrimSpace(string(entry.ID))))
-		sectionID = core.NormalizeDashboardStandardSection(sectionID)
-		if sectionID == core.DashboardSectionHeader || !core.IsKnownDashboardStandardSection(sectionID) || seen[sectionID] {
-			continue
+// dashboardSectionTrait describes how dashboard widget sections normalise
+// and order. The header section is intentionally excluded — it's not a
+// user-toggleable widget.
+var dashboardSectionTrait = sectionTrait[core.DashboardStandardSection, config.DashboardWidgetSection]{
+	extractID:      func(s config.DashboardWidgetSection) core.DashboardStandardSection { return s.ID },
+	extractEnabled: func(s config.DashboardWidgetSection) bool { return s.Enabled },
+	build: func(id core.DashboardStandardSection, enabled bool) config.DashboardWidgetSection {
+		return config.DashboardWidgetSection{ID: id, Enabled: enabled}
+	},
+	normalizeID: func(id core.DashboardStandardSection) core.DashboardStandardSection {
+		return core.NormalizeDashboardStandardSection(
+			core.DashboardStandardSection(strings.ToLower(strings.TrimSpace(string(id)))))
+	},
+	keepID: func(id core.DashboardStandardSection) bool {
+		return id != core.DashboardSectionHeader && core.IsKnownDashboardStandardSection(id)
+	},
+	defaultIDs: func() []core.DashboardStandardSection {
+		ordered := core.DashboardStandardSections()
+		out := make([]core.DashboardStandardSection, 0, len(ordered))
+		for _, section := range ordered {
+			if section != core.DashboardSectionHeader {
+				out = append(out, section)
+			}
 		}
-		out = append(out, config.DashboardWidgetSection{
-			ID:      sectionID,
-			Enabled: entry.Enabled,
-		})
-		seen[sectionID] = true
-	}
+		return out
+	},
+}
 
-	if len(out) == 0 {
-		return nil
-	}
-	return out
+func normalizeWidgetSectionEntries(entries []config.DashboardWidgetSection) []config.DashboardWidgetSection {
+	return normalizeSections(entries, dashboardSectionTrait)
 }
 
 func (m *Model) applyWidgetSectionOverrides() {
@@ -628,22 +634,7 @@ func (m *Model) applyWidgetSectionOverrides() {
 }
 
 func (m Model) defaultWidgetSectionEntries() []config.DashboardWidgetSection {
-	ordered := make([]core.DashboardStandardSection, 0, len(core.DashboardStandardSections()))
-	for _, section := range core.DashboardStandardSections() {
-		if section == core.DashboardSectionHeader {
-			continue
-		}
-		ordered = append(ordered, section)
-	}
-
-	entries := make([]config.DashboardWidgetSection, 0, len(ordered))
-	for _, section := range ordered {
-		entries = append(entries, config.DashboardWidgetSection{
-			ID:      section,
-			Enabled: true,
-		})
-	}
-	return entries
+	return defaultSections(dashboardSectionTrait)
 }
 
 func (m Model) widgetSectionEntries() []config.DashboardWidgetSection {
@@ -651,25 +642,7 @@ func (m Model) widgetSectionEntries() []config.DashboardWidgetSection {
 }
 
 func (m Model) resolvedWidgetSectionEntries() []config.DashboardWidgetSection {
-	if len(m.widgetSections) == 0 {
-		return m.defaultWidgetSectionEntries()
-	}
-
-	out := make([]config.DashboardWidgetSection, len(m.widgetSections))
-	copy(out, m.widgetSections)
-
-	seen := make(map[core.DashboardStandardSection]bool, len(out))
-	for _, entry := range out {
-		seen[entry.ID] = true
-	}
-	for _, entry := range m.defaultWidgetSectionEntries() {
-		if seen[entry.ID] {
-			continue
-		}
-		out = append(out, entry)
-	}
-
-	return out
+	return mergeSections(m.widgetSections, dashboardSectionTrait)
 }
 
 func (m *Model) setWidgetSectionEntries(entries []config.DashboardWidgetSection) {
@@ -685,29 +658,23 @@ func (m *Model) setDetailWidgetSections(entries []config.DetailWidgetSection) {
 	m.invalidateDetailCache()
 }
 
+// detailSectionTrait describes how detail widget sections normalise and
+// order. Unlike dashboard, every known detail section is user-toggleable.
+var detailSectionTrait = sectionTrait[core.DetailStandardSection, config.DetailWidgetSection]{
+	extractID:      func(s config.DetailWidgetSection) core.DetailStandardSection { return s.ID },
+	extractEnabled: func(s config.DetailWidgetSection) bool { return s.Enabled },
+	build: func(id core.DetailStandardSection, enabled bool) config.DetailWidgetSection {
+		return config.DetailWidgetSection{ID: id, Enabled: enabled}
+	},
+	normalizeID: func(id core.DetailStandardSection) core.DetailStandardSection {
+		return core.DetailStandardSection(strings.ToLower(strings.TrimSpace(string(id))))
+	},
+	keepID:     core.IsKnownDetailStandardSection,
+	defaultIDs: core.DefaultDetailSectionOrder,
+}
+
 func normalizeDetailWidgetSectionEntries(entries []config.DetailWidgetSection) []config.DetailWidgetSection {
-	if len(entries) == 0 {
-		return nil
-	}
-
-	out := make([]config.DetailWidgetSection, 0, len(entries))
-	seen := make(map[core.DetailStandardSection]bool, len(entries))
-	for _, entry := range entries {
-		sectionID := core.DetailStandardSection(strings.ToLower(strings.TrimSpace(string(entry.ID))))
-		if !core.IsKnownDetailStandardSection(sectionID) || seen[sectionID] {
-			continue
-		}
-		out = append(out, config.DetailWidgetSection{
-			ID:      sectionID,
-			Enabled: entry.Enabled,
-		})
-		seen[sectionID] = true
-	}
-
-	if len(out) == 0 {
-		return nil
-	}
-	return out
+	return normalizeSections(entries, detailSectionTrait)
 }
 
 func (m *Model) applyDetailWidgetSectionOverrides() {
@@ -727,15 +694,7 @@ func (m *Model) applyDetailWidgetSectionOverrides() {
 }
 
 func (m Model) defaultDetailWidgetSectionEntries() []config.DetailWidgetSection {
-	ordered := core.DefaultDetailSectionOrder()
-	entries := make([]config.DetailWidgetSection, 0, len(ordered))
-	for _, section := range ordered {
-		entries = append(entries, config.DetailWidgetSection{
-			ID:      section,
-			Enabled: true,
-		})
-	}
-	return entries
+	return defaultSections(detailSectionTrait)
 }
 
 func (m Model) detailWidgetSectionEntries() []config.DetailWidgetSection {
@@ -743,25 +702,7 @@ func (m Model) detailWidgetSectionEntries() []config.DetailWidgetSection {
 }
 
 func (m Model) resolvedDetailWidgetSectionEntries() []config.DetailWidgetSection {
-	if len(m.detailWidgetSections) == 0 {
-		return m.defaultDetailWidgetSectionEntries()
-	}
-
-	out := make([]config.DetailWidgetSection, len(m.detailWidgetSections))
-	copy(out, m.detailWidgetSections)
-
-	seen := make(map[core.DetailStandardSection]bool, len(out))
-	for _, entry := range out {
-		seen[entry.ID] = true
-	}
-	for _, entry := range m.defaultDetailWidgetSectionEntries() {
-		if seen[entry.ID] {
-			continue
-		}
-		out = append(out, entry)
-	}
-
-	return out
+	return mergeSections(m.detailWidgetSections, detailSectionTrait)
 }
 
 func (m *Model) setDetailWidgetSectionEntries(entries []config.DetailWidgetSection) {
