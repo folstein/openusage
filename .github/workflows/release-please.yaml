@@ -26,7 +26,10 @@ jobs:
     needs: release-please
     name: Update open release PR branches
     uses: ./.github/workflows/refresh-pr-branches.yaml
+    permissions:
+      contents: write
+      pull-requests: write
     with:
       labels: "autorelease: pending"
     secrets:
-      branch_refresh_token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.AUTOMATION_TOKEN }}
+      branch_refresh_token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.AUTOMATION_TOKEN || secrets.GITHUB_TOKEN }}
