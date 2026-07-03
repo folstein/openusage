@@ -232,6 +232,7 @@ func buildDetailGaugeLines(snap core.UsageSnapshot, widget core.DashboardWidget,
 	}
 
 	var lines []string
+	renderedGauges := 0
 	for _, key := range keys {
 		if gaugeAllowSet != nil && !gaugeAllowSet[key] {
 			continue
@@ -266,8 +267,15 @@ func buildDetailGaugeLines(snap core.UsageSnapshot, widget core.DashboardWidget,
 		}
 
 		labelR := lipgloss.NewStyle().Foreground(colorSubtext).Width(maxLabelW).Render(label)
-		lines = append(lines, labelR+" "+gauge)
-		if len(lines) >= maxLines {
+		gaugeLines := strings.Split(gauge, "\n")
+		lines = append(lines, labelR+" "+gaugeLines[0])
+		annotationIndent := strings.Repeat(" ", maxLabelW+1)
+		for _, annotation := range gaugeLines[1:] {
+			lines = append(lines, annotationIndent+annotation)
+		}
+
+		renderedGauges++
+		if renderedGauges >= maxLines {
 			break
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/janekbaraniewski/openusage/internal/core"
 )
 
@@ -168,6 +169,44 @@ func TestRenderDetailContent_AtVariousWidths(t *testing.T) {
 		out := RenderDetailContent(snap, time.Now(), width, 0.3, 0.1, 0, core.TimeWindowAll, false)
 		if len(out) == 0 {
 			t.Errorf("empty output at width %d", width)
+		}
+	}
+}
+
+func TestBuildDetailUsageSection_ProjectionRowsAlignWithinCard(t *testing.T) {
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	snap := core.UsageSnapshot{
+		ProviderID: "codex",
+		Metrics: map[string]core.Metric{
+			"rate_limit_primary":   makeUsageMetric(50, 100, "5h"),
+			"rate_limit_secondary": makeUsageMetric(40, 100, "7d"),
+		},
+		Resets: map[string]time.Time{
+			"rate_limit_primary":   now.Add(2*time.Hour + 30*time.Minute),
+			"rate_limit_secondary": now.Add(3 * 24 * time.Hour),
+		},
+	}
+	widget := core.DefaultDashboardWidget()
+	widget.GaugePriority = []string{"rate_limit_primary", "rate_limit_secondary"}
+
+	lines := buildDetailUsageSection(snap, widget, 80, 0.30, 0.15, false, now)
+	if len(lines) != 4 {
+		t.Fatalf("expected two gauges and two annotation rows, got %d: %v", len(lines), lines)
+	}
+	for i, line := range lines {
+		if strings.Contains(line, "\n") {
+			t.Fatalf("line %d contains an embedded newline: %q", i, line)
+		}
+	}
+
+	var card strings.Builder
+	renderDetailCard(&card, detailSection{title: "Usage", lines: lines}, 88)
+	renderedCard := strings.TrimPrefix(strings.TrimSuffix(card.String(), "\n"), "\n")
+	rendered := strings.Split(renderedCard, "\n")
+	wantWidth := lipgloss.Width(rendered[0])
+	for i, line := range rendered[1:] {
+		if got := lipgloss.Width(line); got != wantWidth {
+			t.Errorf("rendered card line %d width = %d, want %d: %q", i+1, got, wantWidth, line)
 		}
 	}
 }
