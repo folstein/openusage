@@ -78,6 +78,12 @@ Tracks rate limits via lightweight header probing.
 
 Tracks rate limits via lightweight header probing.
 
+### Azure OpenAI
+
+**Detection:** `AZURE_OPENAI_API_KEY` or `AZURE_API_KEY`, plus `AZURE_RESOURCE_NAME` (or `AZURE_OPENAI_ENDPOINT`) for the endpoint
+
+Tracks rate limits via lightweight header probing against your Azure OpenAI resource endpoint. Shares OpenCode's `AZURE_API_KEY` / `AZURE_RESOURCE_NAME` variables, and a built-in `azure` → `azure_openai` telemetry link routes Azure-via-OpenCode usage onto this tile automatically.
+
 ### Groq
 
 **Detection:** `GROQ_API_KEY` environment variable
